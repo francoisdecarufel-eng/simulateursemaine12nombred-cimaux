@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulateur Mathématique : La Caisse de Novembre</title>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Framer Motion for Animations -->
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Poppins', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Poppins:wght@700;900&display=swap');
+        body {
+            background-color: #fef3c7;
+            background-image: radial-gradient(#fbbf24 0.5px, transparent 0.5px), radial-gradient(#fbbf24 0.5px, #fef3c7 0.5px);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+        }
+        .floating-leaf {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-5px) rotate(5deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        /* Hide scrollbar for clean UI */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #fef3c7; }
+        ::-webkit-scrollbar-thumb { background: #d97706; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        // Data for items in the November Market
+        const MARKET_ITEMS = [
+            { id: 1, name: 'Sachet de Marrons Chauds', price: 4.25, icon: '🌰', desc: 'Marrons grillés réconfortants pour novembre', cat: 'Nourriture' },
+            { id: 2, name: 'Chocolat Chaud aux Épices', price: 3.50, icon: '☕', desc: 'Chaud et réconfortant pour novembre', cat: 'Boissons' },
+            { id: 3, name: 'Tarte aux Pommes', price: 8.75, icon: '🥧', desc: 'Fait maison avec des pommes locales', cat: 'Pâtisserie' },
+            { id: 4, name: 'Sirop d\'Érable (Petite bouteille)', price: 6.10, icon: '🍁', desc: 'Délicieux nectar doré', cat: 'Épicerie' },
+            { id: 5, name: 'Écharpe en Laine Chaude', price: 12.45, icon: '🧣', desc: 'Pour affronter le vent frais de novembre', cat: 'Vêtements' },
+            { id: 6, name: 'Sac de Pommes Craquantes', price: 5.30, icon: '🍎', desc: 'Recueillies fraîchement dans le verger', cat: 'Fruits' },
+            { id: 7, name: 'Bougie à la Cannelle', price: 7.80, icon: '🕯️', desc: 'Une odeur réconfortante', cat: 'Maison' },
+            { id: 8, name: 'Jus de Pomme Chaud', price: 2.65, icon: '🥤', desc: 'Jus de pomme chaud aux clous de girofle', cat: 'Boissons' },
+        ];
+
+        // Denominations available (Dollars vs Cents)
+        const DENOMINATIONS = [
+            { id: 'b20', name: '20$', value: 20.00, type: 'bill', color: 'bg-emerald-600 border-emerald-800 text-white', label: '20 $' },
+            { id: 'b10', name: '10$', value: 10.00, type: 'bill', color: 'bg-purple-600 border-purple-800 text-white', label: '10 $' },
+            { id: 'b5', name: '5$', value: 5.00, type: 'bill', color: 'bg-blue-600 border-blue-800 text-white', label: '5 $' },
+            { id: 'c2', name: '2$', value: 2.00, type: 'coin', color: 'bg-gradient-to-r from-amber-400 via-amber-200 to-amber-500 border-amber-600 text-amber-950 font-bold', label: '2 $' },
+            { id: 'c1', name: '1$', value: 1.00, type: 'coin', color: 'bg-amber-400 border-amber-600 text-amber-950 font-bold', label: '1 $' },
+            { id: 'c25', name: '25¢', value: 0.25, type: 'coin', color: 'bg-slate-300 border-slate-400 text-slate-800 font-bold', label: '25 ¢' },
+            { id: 'c10', name: '10¢', value: 0.10, type: 'coin', color: 'bg-slate-300 border-slate-400 text-slate-700 text-xs font-bold', label: '10 ¢' },
+            { id: 'c5', name: '5¢', value: 0.05, type: 'coin', color: 'bg-amber-700 border-amber-900 text-amber-100 text-xs font-bold', label: '5 ¢' }
+        ];
+
+        function RegisterApp() {
+            // Level and Problem state
+            const [level, setLevel] = useState(1);
+            const [currentItem, setCurrentItem] = useState(MARKET_ITEMS[0]);
+            const [paidMoney, setPaidMoney] = useState([]); 
+            
+            // Mode: "PAY" (make exact amount) or "DEMO" (interactive breakdown visualizer)
+            const [mode, setMode] = useState('PAY');
+            
+            // Feedback UI states
+            const [showAnswer, setShowAnswer] = useState(false);
+            const [showExplanation, setShowExplanation] = useState(false);
+            const [isSuccess, setIsSuccess] = useState(false);
+            const [feedbackMsg, setFeedbackMsg] = useState({ text: '', type: 'info' });
+            
+            // Decimal place explorer state (For DEMO mode)
+            const [demoValue, setDemoValue] = useState(13.45);
+
+            // Audio effects using Web Audio API
+            const playSound = (type) => {
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    if (type === 'coin') {
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(1200, ctx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(1600, ctx.currentTime + 0.08);
+                        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.08);
+                    } else if (type === 'bill') {
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(300, ctx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.15);
+                        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.15);
+                    } else if (type === 'success') {
+                        const notes = [523.25, 659.25, 783.99, 1046.50];
+                        notes.forEach((freq, idx) => {
+                            const o = ctx.createOscillator();
+                            const g = ctx.createGain();
+                            o.connect(g);
+                            g.connect(ctx.destination);
+                            o.frequency.value = freq;
+                            g.gain.setValueAtTime(0.2, ctx.currentTime + idx * 0.08);
+                            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.08 + 0.2);
+                            o.start(ctx.currentTime + idx * 0.08);
+                            o.stop(ctx.currentTime + idx * 0.08 + 0.2);
+                        });
+                    } else if (type === 'error') {
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(180, ctx.currentTime);
+                        osc.frequency.linearRampToValueAtTime(110, ctx.currentTime + 0.2);
+                        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.2);
+                    }
+                } catch (e) {}
+            };
+
+            // Calculate total money placed in drawer
+            const currentTotal = paidMoney.reduce((acc, item) => acc + item.value, 0);
+            const currentTotalFixed = parseFloat(currentTotal.toFixed(2));
+            const targetPrice = currentItem.price;
+
+            // Separate Dollars and Cents explicitly for visual feedback
+            const paidDollars = paidMoney.filter(m => m.value >= 1.00).reduce((acc, i) => acc + i.value, 0);
+            const paidCents = paidMoney.filter(m => m.value < 1.00).reduce((acc, i) => acc + i.value, 0);
+
+            // Split price into Units (Whole dollars), Tenths (10c), Cenths (1c/5c)
+            const getBreakdown = (val) => {
+                const dollars = Math.floor(val);
+                const cents = Math.round((val - dollars) * 100);
+                const tenths = Math.floor(cents / 10);
+                const hundredths = cents % 10;
+                return { dollars, cents, tenths, hundredths };
+            };
+
+            const targetBreakdown = getBreakdown(targetPrice);
+
+            // Handle adding money to tray
+            const addMoney = (denom) => {
+                playSound(denom.type);
+                setPaidMoney(prev => [...prev, { ...denom, instanceId: Date.now() + Math.random() }]);
+                setShowAnswer(false);
+                setFeedbackMsg({ text: '', type: 'info' });
+            };
+
+            // Remove item from payment tray
+            const removeMoneyItem = (instanceId, type) => {
+                playSound(type);
+                setPaidMoney(prev => prev.filter(item => item.instanceId !== instanceId));
+                setIsSuccess(false);
+            };
+
+            // Reset current tray
+            const handleReset = () => {
+                setPaidMoney([]);
+                setShowAnswer(false);
+                setShowExplanation(false);
+                setIsSuccess(false);
+                setFeedbackMsg({ text: 'Caisse réinitialisée. Dépose de la monnaie !', type: 'info' });
+            };
+
+            // Check Answer Logic
+            const checkAnswer = () => {
+                const diff = Math.abs(currentTotalFixed - targetPrice);
+                if (diff < 0.001) {
+                    setIsSuccess(true);
+                    playSound('success');
+                    confetti({
+                        particleCount: 80,
+                        spread: 70,
+                        origin: { y: 0.6 },
+                        colors: ['#d97706', '#b45309', '#15803d', '#f59e0b', '#7c2d12']
+                    });
+                    setFeedbackMsg({ 
+                        text: `Bravo ! ${targetPrice.toFixed(2).replace('.', ',')} $ est le montant exact !`, 
+                        type: 'success' 
+                    });
+                } else if (currentTotalFixed < targetPrice) {
+                    playSound('error');
+                    const remaining = (targetPrice - currentTotalFixed).toFixed(2).replace('.', ',');
+                    setFeedbackMsg({ 
+                        text: `Il manque encore ${remaining} $ pour payer l'article !`, 
+                        type: 'warning' 
+                    });
+                } else {
+                    playSound('error');
+                    const extra = (currentTotalFixed - targetPrice).toFixed(2).replace('.', ',');
+                    setFeedbackMsg({ 
+                        text: `Tu as donné ${extra} $ de trop. Essaie de donner le montant exact !`, 
+                        type: 'error' 
+                    });
+                }
+            };
+
+            // Next Level
+            const nextLevel = () => {
+                const nextIdx = (level) % MARKET_ITEMS.length;
+                setLevel(prev => prev + 1);
+                setCurrentItem(MARKET_ITEMS[nextIdx]);
+                handleReset();
+                setFeedbackMsg({ text: 'Nouvel article à acheter !', type: 'info' });
+            };
+
+            // Solution Helper (calculates optimal coins/bills)
+            const getOptimalCombination = (amount) => {
+                let remaining = Math.round(amount * 100);
+                const result = [];
+                const sortedDenoms = [...DENOMINATIONS].sort((a,b) => b.value - a.value);
+
+                sortedDenoms.forEach(d => {
+                    const dValCents = Math.round(d.value * 100);
+                    while (remaining >= dValCents) {
+                        result.push(d);
+                        remaining -= dValCents;
+                    }
+                });
+                return result;
+            };
+
+            return (
+                <div className="max-w-6xl mx-auto p-3 sm:p-6 pb-20 font-sans">
+                    
+                    {/* TOP BAR / HEADER */}
+                    <header className="bg-gradient-to-r from-amber-800 via-amber-700 to-orange-800 text-amber-50 rounded-2xl p-4 sm:p-6 shadow-xl mb-6 border-b-4 border-amber-950 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 opacity-10 pointer-events-none text-9xl transform translate-x-6 -translate-y-6 select-none">
+                            🍁
+                        </div>
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 relative z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-amber-900/60 p-3 rounded-xl border border-amber-600/40 text-3xl shadow-inner floating-leaf">
+                                    🏪
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="bg-amber-500/30 text-amber-200 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-400/30">
+                                            Marché de Novembre • 4e Année
+                                        </span>
+                                        <span className="bg-orange-500 text-amber-950 text-xs font-black px-2.5 py-0.5 rounded-full shadow">
+                                            Niveau {level}
+                                        </span>
+                                    </div>
+                                    <h1 className="text-2xl sm:text-3xl font-heading font-bold text-amber-100 mt-1">
+                                        La Caisse des Nombres Décimaux
+                                    </h1>
+                                </div>
+                            </div>
+
+                            {/* Mode Selector */}
+                            <div className="flex bg-amber-950/60 p-1.5 rounded-xl border border-amber-600/40 shadow-inner">
+                                <button
+                                    onClick={() => setMode('PAY')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${
+                                        mode === 'PAY'
+                                            ? 'bg-amber-500 text-amber-950 shadow-md scale-105'
+                                            : 'text-amber-200 hover:text-white'
+                                    }`}
+                                >
+                                    <span>🛒</span> Mode Caisse Registreuse
+                                </button>
+                                <button
+                                    onClick={() => setMode('DEMO')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${
+                                        mode === 'DEMO'
+                                            ? 'bg-amber-500 text-amber-950 shadow-md scale-105'
+                                            : 'text-amber-200 hover:text-white'
+                                    }`}
+                                >
+                                    <span>🔍</span> Décomposeur (Virgule)
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* MODE 1: PAY & REGISTER SIMULATION */}
+                    {mode === 'PAY' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                            
+                            {/* LEFT SIDE: CUSTOMER ARTICLE & DECIMAL POSITION CHART */}
+                            <div className="lg:col-span-5 space-y-6">
+                                
+                                {/* Article Card */}
+                                <div className="bg-white rounded-2xl p-5 shadow-md border-2 border-amber-100 relative overflow-hidden">
+                                    <div className="bg-amber-50 rounded-xl p-4 border border-amber-200/60 text-center relative">
+                                        <span className="text-xs font-bold text-amber-700 bg-amber-200/60 px-3 py-1 rounded-full uppercase tracking-wider">
+                                            Article sélectionné
+                                        </span>
+                                        <div className="text-6xl my-3 transform transition hover:scale-110 duration-200">
+                                            {currentItem.icon}
+                                        </div>
+                                        <h2 className="text-xl font-heading font-bold text-slate-800">
+                                            {currentItem.name}
+                                        </h2>
+                                        <p className="text-xs text-slate-500 mt-0.5">{currentItem.desc}</p>
+
+                                        {/* Target Price Display with Visual Split */}
+                                        <div className="mt-4 bg-white border-2 border-amber-400 rounded-xl p-3 inline-block shadow-sm">
+                                            <span className="text-xs text-slate-500 font-semibold block uppercase mb-1">Prix à payer</span>
+                                            
+                                            <div className="flex items-baseline justify-center gap-1 font-heading font-extrabold text-3xl">
+                                                <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title="Dollars entiers">
+                                                    {targetBreakdown.dollars} $
+                                                </span>
+                                                <span className="text-amber-600 text-4xl font-black px-1 animate-pulse" title="La virgule">,</span>
+                                                <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200" title="Partie décimale (sous)">
+                                                    {(targetBreakdown.cents < 10 ? '0' : '') + targetBreakdown.cents} ¢
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-1 px-1">
+                                                <span className="text-emerald-700">Dollars Entiers</span>
+                                                <span className="text-purple-700">Décimaux (Sous)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action buttons row */}
+                                    <div className="grid grid-cols-2 gap-2 mt-4">
+                                        <button
+                                            onClick={() => setShowAnswer(!showAnswer)}
+                                            className="px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 border border-amber-300"
+                                        >
+                                            <span>💡</span> {showAnswer ? 'Masquer indice' : 'Voir la réponse'}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowExplanation(!showExplanation)}
+                                            className="px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 border border-blue-300"
+                                        >
+                                            <span>📖</span> {showExplanation ? 'Masquer explications' : 'Voir explications'}
+                                        </button>
+                                    </div>
+
+                                    {/* Answer Hint Box */}
+                                    <AnimatePresence>
+                                        {showAnswer && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="mt-3 bg-amber-50 rounded-xl p-3 border border-amber-300 text-xs text-amber-900 overflow-hidden"
+                                            >
+                                                <p className="font-bold mb-1">💡 Solution suggérée :</p>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {getOptimalCombination(currentItem.price).map((denom, i) => (
+                                                        <span key={i} className="px-2 py-0.5 bg-amber-200 text-amber-950 font-bold rounded text-[11px] border border-amber-400">
+                                                            {denom.label}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+
+                                    {/* Detailed Pedagogical Explanation Box */}
+                                    <AnimatePresence>
+                                        {showExplanation && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="mt-3 bg-blue-50 rounded-xl p-3.5 border border-blue-200 text-xs text-blue-950 space-y-2 overflow-hidden"
+                                            >
+                                                <h4 className="font-bold text-blue-900 text-sm flex items-center gap-1">
+                                                    <span>🧠</span> Séparation Entiers vs Décimaux :
+                                                </h4>
+                                                <p>
+                                                    Pour former le prix <strong>{currentItem.price.toFixed(2).replace('.', ',')} $</strong> :
+                                                </p>
+                                                <ul className="list-disc pl-4 space-y-1">
+                                                    <li>
+                                                        <strong>{targetBreakdown.dollars} $</strong> = Les <span className="text-emerald-800 font-bold">dollars entiers</span> (à gauche de la virgule).
+                                                    </li>
+                                                    <li>
+                                                        <strong>, (La virgule)</strong> = Elle indique qu'on passe aux morceaux de dollar (les centimes).
+                                                    </li>
+                                                    <li>
+                                                        <strong>{targetBreakdown.tenths}</strong> = Le rang des <span className="text-purple-800 font-bold">dixièmes</span> (pièces de 10¢).
+                                                    </li>
+                                                    <li>
+                                                        <strong>{targetBreakdown.hundredths}</strong> = Le rang des <span className="text-purple-800 font-bold">centièmes</span> (pièces de 5¢ / 1¢).
+                                                    </li>
+                                                </ul>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+
+                                {/* Place Value Board Visualizer */}
+                                <div className="bg-white rounded-2xl p-4 shadow-md border-2 border-amber-100">
+                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                                        <span>📊 Tableau de valeur de position</span>
+                                    </h3>
+                                    
+                                    <div className="grid grid-cols-5 text-center border-2 border-slate-200 rounded-xl overflow-hidden bg-slate-50 text-xs">
+                                        {/* Header Row */}
+                                        <div className="bg-emerald-800 text-white p-2 font-bold col-span-2">
+                                            Partie Entière (Dollars)
+                                        </div>
+                                        <div className="bg-amber-500 text-amber-950 p-2 font-black">
+                                            ,
+                                        </div>
+                                        <div className="bg-purple-800 text-white p-2 font-bold col-span-2">
+                                            Partie Décimale (Sous)
+                                        </div>
+
+                                        {/* Sub headers */}
+                                        <div className="bg-emerald-100 text-emerald-900 p-1 font-semibold text-[11px]">Dizaines</div>
+                                        <div className="bg-emerald-100 text-emerald-900 p-1 font-semibold text-[11px]">Unités (1$)</div>
+                                        <div className="bg-amber-200 text-amber-900 p-1 font-black">Virgule</div>
+                                        <div className="bg-purple-100 text-purple-900 p-1 font-semibold text-[11px]">Dixièmes (10¢)</div>
+                                        <div className="bg-purple-100 text-purple-900 p-1 font-semibold text-[11px]">Centièmes (1¢)</div>
+
+                                        {/* Target row */}
+                                        <div className="p-2 border-t font-extrabold text-emerald-800 text-sm bg-emerald-50">
+                                            {Math.floor(targetBreakdown.dollars / 10)}
+                                        </div>
+                                        <div className="p-2 border-t font-extrabold text-emerald-800 text-sm bg-emerald-50">
+                                            {targetBreakdown.dollars % 10}
+                                        </div>
+                                        <div className="p-2 border-t font-black bg-amber-300 text-amber-950 text-base">
+                                            ,
+                                        </div>
+                                        <div className="p-2 border-t font-extrabold text-purple-800 text-sm bg-purple-50">
+                                            {targetBreakdown.tenths}
+                                        </div>
+                                        <div className="p-2 border-t font-extrabold text-purple-800 text-sm bg-purple-50">
+                                            {targetBreakdown.hundredths}
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            {/* RIGHT SIDE: THE REGISTER & CLEARLY SEPARATED MONEY DRAWER */}
+                            <div className="lg:col-span-7 space-y-6">
+                                
+                                {/* REGISTER DISPLAY TRAY */}
+                                <div className="bg-amber-900 rounded-2xl p-5 shadow-2xl border-4 border-amber-950 text-white relative">
+                                    
+                                    {/* Digital Register Display Screen */}
+                                    <div className="bg-emerald-950 border-4 border-emerald-800 rounded-xl p-4 shadow-inner mb-4 flex justify-between items-center font-mono">
+                                        <div>
+                                            <div className="text-[10px] uppercase text-emerald-400 font-sans tracking-widest font-bold">Total déposé dans la caisse</div>
+                                            <div className="text-3xl sm:text-4xl font-bold tracking-wider flex items-baseline gap-1">
+                                                <span className="text-emerald-300">{Math.floor(currentTotalFixed)}</span>
+                                                <span className="text-amber-400 text-3xl font-black">,</span>
+                                                <span className="text-purple-300">{((currentTotalFixed % 1) * 100).toFixed(0).padStart(2, '0')}</span>
+                                                <span className="text-xl text-emerald-400 ml-1">$</span>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-[10px] uppercase text-slate-400 font-sans font-bold">Cible</div>
+                                            <div className="text-xl text-emerald-400 font-bold">
+                                                {targetPrice.toFixed(2).replace('.', ',')} $
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Cash Tray (Split visual: Dollars Left / Cents Right) */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+                                        
+                                        {/* Tray: Dollars */}
+                                        <div className="bg-amber-950/90 border-2 border-emerald-500/40 rounded-xl p-3 min-h-[140px]">
+                                            <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-2 flex justify-between border-b border-emerald-900/60 pb-1">
+                                                <span>💵 Zone Dollars Entiers</span>
+                                                <span className="text-emerald-300 font-mono">{paidDollars.toFixed(2).replace('.', ',')} $</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 items-center justify-start">
+                                                <AnimatePresence>
+                                                    {paidMoney.filter(m => m.value >= 1.00).map((item) => (
+                                                        <motion.button
+                                                            key={item.instanceId}
+                                                            initial={{ scale: 0.5, opacity: 0 }}
+                                                            animate={{ scale: 1, opacity: 1 }}
+                                                            exit={{ scale: 0.2, opacity: 0 }}
+                                                            onClick={() => removeMoneyItem(item.instanceId, item.type)}
+                                                            className={`relative shadow-md rounded flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-white transition ${
+                                                                item.type === 'bill' 
+                                                                    ? `${item.color} w-16 h-8 border text-[11px] font-bold rounded-sm` 
+                                                                    : `${item.color} w-9 h-9 border rounded-full text-[11px]`
+                                                            }`}
+                                                            title="Cliquer pour retirer"
+                                                        >
+                                                            {item.label}
+                                                        </motion.button>
+                                                    ))}
+                                                </AnimatePresence>
+                                                {paidMoney.filter(m => m.value >= 1.00).length === 0 && (
+                                                    <span className="text-xs text-amber-500/40 italic p-2">Aucun dollar entier</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Tray: Cents */}
+                                        <div className="bg-amber-950/90 border-2 border-purple-500/40 rounded-xl p-3 min-h-[140px]">
+                                            <div className="text-[11px] font-bold text-purple-400 uppercase tracking-wider mb-2 flex justify-between border-b border-purple-900/60 pb-1">
+                                                <span>🪙 Zone Sous / Décimaux</span>
+                                                <span className="text-purple-300 font-mono">{(paidCents * 100).toFixed(0)} ¢</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 items-center justify-start">
+                                                <AnimatePresence>
+                                                    {paidMoney.filter(m => m.value < 1.00).map((item) => (
+                                                        <motion.button
+                                                            key={item.instanceId}
+                                                            initial={{ scale: 0.5, opacity: 0 }}
+                                                            animate={{ scale: 1, opacity: 1 }}
+                                                            exit={{ scale: 0.2, opacity: 0 }}
+                                                            onClick={() => removeMoneyItem(item.instanceId, item.type)}
+                                                            className={`${item.color} w-9 h-9 border rounded-full text-[11px] shadow flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-white transition`}
+                                                            title="Cliquer pour retirer"
+                                                        >
+                                                            {item.label}
+                                                        </motion.button>
+                                                    ))}
+                                                </AnimatePresence>
+                                                {paidMoney.filter(m => m.value < 1.00).length === 0 && (
+                                                    <span className="text-xs text-amber-500/40 italic p-2">Aucun sous / centime</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action / Validation Controls */}
+                                    <div className="mt-4 flex flex-wrap gap-2 justify-between items-center">
+                                        <button
+                                            onClick={handleReset}
+                                            className="px-4 py-2.5 bg-amber-800 hover:bg-amber-700 text-amber-100 rounded-xl font-bold text-xs transition border border-amber-600 shadow"
+                                        >
+                                            🔄 Réessayer (Vider)
+                                        </button>
+
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={checkAnswer}
+                                                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-heading font-bold text-sm shadow-lg border border-emerald-400 transform transition active:scale-95 flex items-center gap-1.5"
+                                            >
+                                                <span>✅</span> Valider le montant
+                                            </button>
+
+                                            <button
+                                                onClick={nextLevel}
+                                                className="px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold text-xs shadow transition border border-orange-400 flex items-center gap-1"
+                                            >
+                                                <span>Passer au suivant ➡️</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Feedback Toast Banner */}
+                                <AnimatePresence>
+                                    {feedbackMsg.text && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0 }}
+                                            className={`p-4 rounded-xl border font-bold text-sm flex items-center justify-between shadow ${
+                                                feedbackMsg.type === 'success' ? 'bg-emerald-100 border-emerald-400 text-emerald-900' :
+                                                feedbackMsg.type === 'error' ? 'bg-red-100 border-red-400 text-red-900' :
+                                                feedbackMsg.type === 'warning' ? 'bg-amber-100 border-amber-400 text-amber-900' :
+                                                'bg-blue-100 border-blue-400 text-blue-900'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span>
+                                                    {feedbackMsg.type === 'success' ? '🎉' : feedbackMsg.type === 'error' ? '⚠️' : '💡'}
+                                                </span>
+                                                <span>{feedbackMsg.text}</span>
+                                            </div>
+                                            {isSuccess && (
+                                                <button 
+                                                    onClick={nextLevel} 
+                                                    className="bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-emerald-800 transition shadow"
+                                                >
+                                                    Prochain article →
+                                                </button>
+                                            )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+
+                                {/* THE MONEY DRAWER CLEARLY SEPARATED (ENTIERS VS DÉCIMAUX) */}
+                                <div className="bg-white rounded-2xl p-5 shadow-md border-2 border-amber-100 space-y-4">
+                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b pb-2">
+                                        💵 Tiroir-Caisse (Clique pour ajouter)
+                                    </h3>
+
+                                    {/* SECTION 1: DOLLARS ENTIERS (LEFT SIDE OF THE COMMA) */}
+                                    <div className="bg-emerald-50/70 rounded-xl p-3 border-2 border-emerald-200">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-extrabold text-emerald-900 uppercase flex items-center gap-1">
+                                                <span>🟢</span> PARTIE ENTIÈRE : Dollars ($)
+                                            </span>
+                                            <span className="text-[10px] bg-emerald-200 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                                                À gauche de la virgule
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                            {DENOMINATIONS.filter(d => d.value >= 1.00).map(denom => (
+                                                <button
+                                                    key={denom.id}
+                                                    onClick={() => addMoney(denom)}
+                                                    className={`${denom.color} py-2 px-2 rounded-xl font-heading font-extrabold text-sm border-2 shadow hover:shadow-lg transform transition hover:-translate-y-1 active:translate-y-0 flex flex-col items-center justify-center`}
+                                                >
+                                                    <span>{denom.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* SECTION 2: DÉCIMAUX / SOUS (RIGHT SIDE OF THE COMMA) */}
+                                    <div className="bg-purple-50/70 rounded-xl p-3 border-2 border-purple-200">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-extrabold text-purple-900 uppercase flex items-center gap-1">
+                                                <span>🟣</span> PARTIE DÉCIMALE : Sous / Centimes (¢)
+                                            </span>
+                                            <span className="text-[10px] bg-purple-200 text-purple-800 font-bold px-2 py-0.5 rounded-full">
+                                                À droite de la virgule
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 sm:grid-cols-3 gap-2 w-full max-w-sm">
+                                            {DENOMINATIONS.filter(d => d.value < 1.00).map(denom => (
+                                                <button
+                                                    key={denom.id}
+                                                    onClick={() => addMoney(denom)}
+                                                    className={`${denom.color} py-2.5 rounded-xl border-2 shadow hover:shadow-md transform transition hover:scale-105 active:scale-95 flex flex-col items-center justify-center`}
+                                                >
+                                                    <span className="text-sm font-bold">{denom.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODE 2: INTERACTIVE DECIMAL BREAKDOWN DEMONSTRATION */}
+                    {mode === 'DEMO' && (
+                        <div className="bg-white rounded-2xl p-6 shadow-xl border-2 border-amber-100 space-y-6">
+                            <div className="text-center max-w-2xl mx-auto space-y-2">
+                                <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full uppercase">
+                                    Démonstration Visuelle Guidée
+                                </span>
+                                <h2 className="text-2xl font-heading font-bold text-slate-800">
+                                    La Virgule : La Frontière entre les Dollars et les Sous
+                                </h2>
+                                <p className="text-slate-600 text-sm">
+                                    Ajuste le montant ci-dessous à l'aide des curseurs pour voir comment la partie entière et la partie décimale se séparent.
+                                </p>
+                            </div>
+
+                            {/* Slider Controls for Demo */}
+                            <div className="bg-amber-50 rounded-2xl p-6 border border-amber-200 max-w-3xl mx-auto space-y-6">
+                                <div className="text-center">
+                                    <div className="text-xs font-bold text-amber-800 uppercase tracking-widest">Montant actuel</div>
+                                    <div className="text-5xl font-heading font-black tracking-tight mt-1 flex items-baseline justify-center gap-1">
+                                        <span className="text-emerald-700" title="Dollars">{Math.floor(demoValue)}</span>
+                                        <span className="text-amber-600 text-6xl leading-none">,</span>
+                                        <span className="text-purple-700" title="Sous / Centimes">{((demoValue % 1) * 100).toFixed(0).padStart(2, '0')}</span>
+                                        <span className="text-3xl text-slate-700 ml-1">$</span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-amber-200">
+                                    {/* Dollar slider */}
+                                    <div className="bg-emerald-50 p-4 rounded-xl border-2 border-emerald-200 shadow-sm">
+                                        <label className="block text-xs font-bold text-emerald-900 mb-2">
+                                            🟢 Dollars entiers (À gauche) : <span className="text-emerald-700 font-black text-sm">{Math.floor(demoValue)} $</span>
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="50"
+                                            value={Math.floor(demoValue)}
+                                            onChange={(e) => {
+                                                const cents = Math.round((demoValue % 1) * 100);
+                                                setDemoValue(parseInt(e.target.value) + (cents / 100));
+                                            }}
+                                            className="w-full accent-emerald-600 h-3 bg-emerald-200 rounded-lg cursor-pointer"
+                                        />
+                                    </div>
+
+                                    {/* Cents slider */}
+                                    <div className="bg-purple-50 p-4 rounded-xl border-2 border-purple-200 shadow-sm">
+                                        <label className="block text-xs font-bold text-purple-900 mb-2">
+                                            🟣 Sous / Centimes (À droite) : <span className="text-purple-700 font-black text-sm">{Math.round((demoValue % 1) * 100)} ¢</span>
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="99"
+                                            step="5"
+                                            value={Math.round((demoValue % 1) * 100)}
+                                            onChange={(e) => {
+                                                const dollars = Math.floor(demoValue);
+                                                setDemoValue(dollars + (parseInt(e.target.value) / 100));
+                                            }}
+                                            className="w-full accent-purple-600 h-3 bg-purple-200 rounded-lg cursor-pointer"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Deconstruction Visual Blocks */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                
+                                {/* Block 1: Dollars */}
+                                <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4 text-center shadow">
+                                    <div className="text-3xl mb-1">💵</div>
+                                    <div className="text-xs font-bold text-emerald-800 uppercase">Partie Entière</div>
+                                    <div className="text-3xl font-black text-emerald-950 my-1">
+                                        {Math.floor(demoValue)} $
+                                    </div>
+                                    <p className="text-xs text-emerald-700 mt-2">
+                                        Ce sont les dollars complets. Ils sont placés <strong>toujours à gauche</strong> de la virgule.
+                                    </p>
+                                </div>
+
+                                {/* Block 2: The Comma */}
+                                <div className="bg-amber-100 border-2 border-amber-400 rounded-2xl p-4 text-center flex flex-col justify-center items-center shadow">
+                                    <div className="text-6xl font-black text-amber-900 leading-none">,</div>
+                                    <div className="text-xs font-bold text-amber-900 uppercase mt-2">La Virgule</div>
+                                    <p className="text-xs text-amber-800 mt-2 font-medium">
+                                        Elle sépare la partie entière (dollars) de la partie décimale (sous/centimes).
+                                    </p>
+                                </div>
+
+                                {/* Block 3: Cents */}
+                                <div className="bg-purple-50 border-2 border-purple-300 rounded-2xl p-4 text-center shadow">
+                                    <div className="text-3xl mb-1">🪙</div>
+                                    <div className="text-xs font-bold text-purple-800 uppercase">Partie Décimale</div>
+                                    <div className="text-3xl font-black text-purple-950 my-1">
+                                        {Math.round((demoValue % 1) * 100)} ¢
+                                    </div>
+                                    <p className="text-xs text-purple-700 mt-2">
+                                        Composée des <strong>dixièmes</strong> (paquets de 10¢) et des <strong>centièmes</strong> (sous individuels).
+                                    </p>
+                                </div>
+
+                            </div>
+
+                            {/* Place Value Table in Demo */}
+                            <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-inner">
+                                <h4 className="text-sm font-bold text-amber-400 mb-3 text-center">
+                                    Décomposition par rang de valeur de position
+                                </h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 text-center gap-2 text-xs">
+                                    <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                        <div className="text-slate-400 text-[10px] uppercase font-bold">Dizaines</div>
+                                        <div className="text-2xl font-bold text-emerald-400 my-1">
+                                            {Math.floor(Math.floor(demoValue) / 10)}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400">= {Math.floor(Math.floor(demoValue) / 10) * 10} $</div>
+                                    </div>
+
+                                    <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                        <div className="text-slate-400 text-[10px] uppercase font-bold">Unités (1$)</div>
+                                        <div className="text-2xl font-bold text-emerald-400 my-1">
+                                            {Math.floor(demoValue) % 10}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400">= {Math.floor(demoValue) % 10} $</div>
+                                    </div>
+
+                                    <div className="bg-slate-800 p-3 rounded-xl border border-purple-500/40">
+                                        <div className="text-purple-400 text-[10px] uppercase font-bold">Dixièmes (10¢)</div>
+                                        <div className="text-2xl font-bold text-purple-400 my-1">
+                                            {Math.floor(Math.round((demoValue % 1) * 100) / 10)}
+                                        </div>
+                                        <div className="text-[10px] text-purple-300">
+                                            = {(Math.floor(Math.round((demoValue % 1) * 100) / 10) * 0.1).toFixed(1).replace('.', ',')} $
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800 p-3 rounded-xl border border-purple-500/40">
+                                        <div className="text-purple-400 text-[10px] uppercase font-bold">Centièmes (1¢)</div>
+                                        <div className="text-2xl font-bold text-purple-400 my-1">
+                                            {Math.round((demoValue % 1) * 100) % 10}
+                                        </div>
+                                        <div className="text-[10px] text-purple-300">
+                                            = {((Math.round((demoValue % 1) * 100) % 10) * 0.01).toFixed(2).replace('.', ',')} $
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    )}
+
+                    {/* FOOTER / CREDIT */}
+                    <footer className="mt-8 text-center text-xs text-amber-900/60 font-semibold pb-4">
+                        Simulateur Pédagogique EdTech • Conçu pour l'apprentissage des nombres décimaux (Cycle 2/3)
+                    </footer>
+
+                </div>
+            );
+        }
+
+        // Render React application
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<RegisterApp />);
+    </script>
+</body>
+</html>
